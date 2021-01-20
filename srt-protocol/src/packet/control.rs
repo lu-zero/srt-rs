@@ -360,7 +360,7 @@ impl SocketType {
 }
 
 impl ControlPacket {
-    pub fn parse(buf: &mut impl Buf) -> Result<ControlPacket, PacketParseError> {
+    pub fn parse(buf: &mut impl Buf, is_ipv6: bool) -> Result<ControlPacket, PacketParseError> {
         let control_type = buf.get_u16() << 1 >> 1; // clear first bit
 
         // get reserved data, which is the last two bytes of the first four bytes
@@ -373,7 +373,13 @@ impl ControlPacket {
             timestamp,
             dest_sockid: SocketID(dest_sockid),
             // just match against the second byte, as everything is in that
-            control_type: ControlTypes::deserialize(control_type, reserved, add_info, buf)?,
+            control_type: ControlTypes::deserialize(
+                control_type,
+                reserved,
+                add_info,
+                buf,
+                is_ipv6,
+            )?,
         })
     }
 
@@ -432,6 +438,7 @@ impl ControlTypes {
         reserved: u16,
         extra_info: i32,
         mut buf: T,
+        is_ipv6: bool,
     ) -> Result<ControlTypes, PacketParseError> {
         match packet_type {
             0x0 => {
@@ -473,7 +480,7 @@ impl ControlTypes {
                 buf.copy_to_slice(&mut ip_buf);
 
                 // TODO: this is probably really wrong, so fix it
-                let peer_addr = if ip_buf[4..] == [0; 12][..] {
+                let peer_addr = if !is_ipv6 {
                     IpAddr::from(Ipv4Addr::new(ip_buf[3], ip_buf[2], ip_buf[1], ip_buf[0]))
                 } else {
                     IpAddr::from(ip_buf)
